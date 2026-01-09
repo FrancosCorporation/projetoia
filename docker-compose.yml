@@ -1,0 +1,72 @@
+services:
+  # TRANSCRIÇÃO (Whisper)
+  whisper:
+    build: ./whisper
+    container_name: whisper
+    ports:
+      - "9000:9000"
+    devices:
+      - "/dev/dxg:/dev/dxg" # ESSENCIAL para GPU AMD/DirectML
+    environment:
+      - LD_LIBRARY_PATH=/usr/lib/wsl/lib # Ajuda a localizar os drivers do Windows
+    volumes:
+      - /usr/lib/wsl:/usr/lib/wsl # Mapeia os drivers da GPU do host para o container
+    restart: unless-stopped
+
+  # INTELIGÊNCIA (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    devices:
+      - /dev/dxg:/dev/dxg
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0 # Força compatibilidade com GPUs AMD modernas
+      - OLLAMA_INTEL_GPU=0              # Garante que não tente usar integrada da Intel
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    # O Ollama vai detectar o /dev/dxg e tentar usar aceleração via GPU
+    entrypoint: /bin/sh -c "(ollama serve & sleep 5 && ollama run llama3) && tail -f /dev/null"
+    restart: unless-stopped
+
+  # VOZ (Piper)
+  # VOZ (Piper)
+  piper:
+    image: rhasspy/piper-http
+    container_name: piper
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./piper:/quality
+    # O SEGREDO ESTÁ AQUI: Passamos o -m (padrão) e o --data-dir (para as outras vozes)
+    command: ["-m", "/quality/pt_BR-faber-medium.onnx", "--data-dir", "/quality"]
+    
+
+  # MAESTRO (Bot)
+  bot:
+    build: ./bot
+    container_name: telegram_bot
+    depends_on:
+      - whisper
+      - ollama
+      - piper
+    command: sh -c "sleep 20 && node index.js"
+    env_file:
+      - .env
+    restart: unless-stopped
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Usamos o caminho relativo garantindo que o arquivo exista no host
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:rw
+    # Removi a linha SEARXNG_SETTINGS="" para ele focar apenas no arquivo do volume
+    cap_add:
+      - NET_ADMIN
+volumes:
+  ollama_data:

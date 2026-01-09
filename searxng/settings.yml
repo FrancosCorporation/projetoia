@@ -1,0 +1,22 @@
+# Configuração otimizada para o Bot Maestro
+use_default_settings: true
+
+server:
+  secret_key: "maestro_secret_key_123"
+  limiter: false       # DESATIVA o bloqueio de bots (essencial!)
+  image_proxy: true
+  base_url: http://localhost:8080/
+
+search:
+  formats:
+    - html
+    - json             # HABILITA o formato que o seu index.js lê
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+  - name: bing
+    engine: bing
+  - name: wikipedia
+    engine: wikipedia
