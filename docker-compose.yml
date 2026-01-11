@@ -1,61 +1,62 @@
 services:
   # TRANSCRIÇÃO (Whisper)
   whisper:
-    build: ./whisper
+    image: onerahmet/openai-whisper-asr-webservice:latest
     container_name: whisper
     ports:
       - "9000:9000"
-    devices:
-      - "/dev/dxg:/dev/dxg" # ESSENCIAL para GPU AMD/DirectML
     environment:
-      - LD_LIBRARY_PATH=/usr/lib/wsl/lib # Ajuda a localizar os drivers do Windows
+      - ASR_MODEL=base
+      - ASR_ENGINE=openai_whisper
+    devices:
+      - "/dev/dxg:/dev/dxg"
     volumes:
-      - /usr/lib/wsl:/usr/lib/wsl # Mapeia os drivers da GPU do host para o container
+      - /usr/lib/wsl:/usr/lib/wsl
     restart: unless-stopped
 
-  # INTELIGÊNCIA (Ollama)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    devices:
-      - /dev/dxg:/dev/dxg
-    environment:
-      - HSA_OVERRIDE_GFX_VERSION=10.3.0 # Força compatibilidade com GPUs AMD modernas
-      - OLLAMA_INTEL_GPU=0              # Garante que não tente usar integrada da Intel
-    volumes:
-      - ollama_data:/root/.ollama
+  # INTERFACE WEB (Opcional, apontando para o Windows)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
     ports:
-      - "11434:11434"
-    # O Ollama vai detectar o /dev/dxg e tentar usar aceleração via GPU
-    entrypoint: /bin/sh -c "(ollama serve & sleep 5 && ollama run llama3) && tail -f /dev/null"
+      - "3000:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    volumes:
+      - open-webui_data:/app/backend/data
     restart: unless-stopped
 
-  # VOZ (Piper)
-  # VOZ (Piper)
+  # VOZ (Piper) - IMAGEM CORRIGIDA
+  # VOZ (Piper) - Usando build local para evitar erro de download
   piper:
-    image: rhasspy/piper-http
+    build: ./piper  # <--- Use o seu Dockerfile local
     container_name: piper
     restart: unless-stopped
     ports:
       - "5000:5000"
     volumes:
       - ./piper:/quality
-    # O SEGREDO ESTÁ AQUI: Passamos o -m (padrão) e o --data-dir (para as outras vozes)
-    command: ["-m", "/quality/pt_BR-faber-medium.onnx", "--data-dir", "/quality"]
-    
+    # Comando para o servidor oficial que você instalou via PIP
+    command: ["--model", "/quality/pt_BR-faber-medium.onnx", "--port", "5000"]
 
-  # MAESTRO (Bot)
+  # JARVIS (Bot Telegram)
   bot:
     build: ./bot
     container_name: telegram_bot
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - whisper
-      - ollama
       - piper
-    command: sh -c "sleep 20 && node index.js"
     env_file:
       - .env
     restart: unless-stopped
+    environment:
+      - TZ=America/Sao_Paulo
+
+  # BUSCA (Searxng)
   searxng:
     image: searxng/searxng:latest
     container_name: searxng
@@ -63,10 +64,12 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Usamos o caminho relativo garantindo que o arquivo exista no host
       - ./searxng/settings.yml:/etc/searxng/settings.yml:rw
-    # Removi a linha SEARXNG_SETTINGS="" para ele focar apenas no arquivo do volume
     cap_add:
       - NET_ADMIN
+    environment:
+      - TZ=America/Sao_Paulo
+
 volumes:
-  ollama_data:
+  open-webui_data:
+  
