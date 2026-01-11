@@ -2,73 +2,69 @@
 const axios = require("axios");
 
 async function pensar(texto, contextoWeb, historico, url, chatId, perfil = "estrategista") {
-    const dataHoraBrasilia = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
-    // Definição de Perfis de Pensamento
     const perfis = {
         estrategista: {
-            temp: 0.3,
-            prompt: `VOCÊ É O JARVIS.
-    [REGRAS DE CONDUTA]
-    - PROIBIDO dar lições de gramática ou corrigir a escrita do usuário.
-    - Se o usuário fizer uma pergunta pessoal ou de cortesia que passou pelo filtro, responda de forma breve e mude para o modo operacional.
-    - Se não houver dados técnicos no contexto, não invente explicações linguísticas.
-    - somente se solicitado.`
+            temp: 0.5, 
+            prompt: `Você é uma inteligência avançada e direta. 
+            Responda de forma curta, inteligente e sem formalidades como "Senhor".
+            Se o usuário pedir um vídeo, apenas confirme a execução.`
         },
-        resumo: {
-            temp: 0.1, // Quase zero de criatividade, foco total em fatos
-            predict: 600, // Mais espaço para não cortar dados vitais
-            penalty: 0.2, // Pode repetir termos técnicos se necessário para precisão
-            prompt: `VOCÊ É O NÚCLEO DE MEMÓRIA DO JARVIS. COMPRIMA O HISTÓRICO MANTENDO APENAS DADOS NUCLEARES.`
-        },
-        criativo: {
-            temp: 0.7,
-            predict: 800,
-            penalty: 1.1,
-            prompt: `VOCÊ É O MODO BRAINSTORM DO JARVIS. EXPLORE POSSIBILIDADES FORA DA CAIXA.`
-        }, content_creator: {
-            temp: 0.7, // Mais criativo para roteiros
-            predict: 800, // Respostas mais longas para roteiros completos
-            penalty: 1.1,
-            prompt: `VOCÊ É O DIRETOR DE CONTEÚDO DO JARVIS. 
-    Seu objetivo é criar roteiros virais para TikTok (máximo 60 segundos).
-    
-    ESTRUTURA DO ROTEIRO:
-    1. GANCHO (0-3s): Algo que impeça o scroll.
-    2. CORPO: Informação rápida e visual.
-    3. CTA (Call to Action): Comando para seguir ou comentar.
-    
-    Sempre forneça o ROTEIRO e o PROMPT que o usuário deve colar na IA de vídeo.`
+        video_director: {
+            temp: 0.1, // Temperatura mínima para evitar que ele invente conversas
+            prompt: `VOCÊ É UM GERADOR DE ROTEIROS CINEMATOGRÁFICOS.
+            MISSÃO: Escrever APENAS o texto da narração para o vídeo.
+            REGRAS ABSOLUTAS:
+            1. NÃO dê sugestões de ferramentas (Canva, InVideo, etc).
+            2. NÃO converse com o usuário.
+            3. NÃO use introduções como "Aqui está".
+            4. FOQUE no tema: Padrão de vida, superação e sucesso.`
         }
     };
 
     const config = perfis[perfil] || perfis.estrategista;
 
+    // A instrução final agora é um comando imperativo para o modelo
+    const instrucaoFinal = perfil === "video_director"
+        ? "ESCREVA DIRETAMENTE O TEXTO PARA SER NARRADO NO VÍDEO:"
+        : "RESPOSTA:";
+
     const prompt = `
     ${config.prompt}
-    HORA ATUAL: ${dataHoraBrasilia}
-    HISTÓRICO: ${historico}
-    CONTEXTO WEB: ${contextoWeb}
-    PERGUNTA: ${texto}
-
-    RESPOSTA JARVIS:`;
+    [HISTÓRICO]: ${historico}
+    [WEB]: ${contextoWeb}
+    [PEDIDO ATUAL]: "${texto}"
+    
+    ${instrucaoFinal}`;
 
     try {
         const res = await axios.post(url, {
-            model: "llama3:8b-instruct-q8_0",
+            model: "gemma3:12b",
             prompt,
             stream: false,
             options: {
                 temperature: config.temp,
-                num_predict: config.predict,
-                presence_penalty: config.penalty,
-                num_ctx: 8192 // Janela de contexto expandida para o Q8
+                num_predict: 800, // Reduzido para ser mais rápido e direto
+                num_ctx: 16384
             }
-        }, { timeout: 120000 });
+        }, { timeout: 150000 });
 
-        return res.data.response.trim();
+        let resposta = res.data.response.trim();
+
+        // Limpeza agressiva para garantir que NADA além do roteiro passe
+        if (perfil === "video_director") {
+            // Remove frases de "ajuda" que o modelo costuma colocar
+            resposta = resposta.replace(/^(Certamente|Aqui está|Com certeza|Com base|Senhor|Entendido|Claro).*[:!]/gi, "").trim();
+            
+            // Se ele começar a listar ferramentas, nós cortamos
+            if (resposta.includes("Canva") || resposta.includes("InVideo")) {
+                return "A jornada do zero ao milhão não é sobre ferramentas, é sobre visão. Da garagem ao topo, o sucesso é construído com cada decisão.";
+            }
+        }
+
+        return resposta;
     } catch (e) {
-        return "⚠️ Erro no processamento estratégico.";
+        console.error("Erro no Brain:", e);
+        return "⚠️ Erro no processamento dos núcleos.";
     }
 }
 

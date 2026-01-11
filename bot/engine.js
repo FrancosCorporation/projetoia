@@ -1,72 +1,54 @@
-// engine.js
+//engine.js
 const memory = require("./memory");
 const searcher = require("./searcher");
 const brain = require("./brain");
 const cleaner = require("./cleaner");
+const factory = require("./factory");
 
 async function processarIA(bot, texto, chatId, SERVICES) {
+    const textoLow = texto.toLowerCase().trim();
+    console.log(`\n--- 🚀 [DEBUG] ENTRADA: "${textoLow}" ---`);
+
     try {
-        const textoLow = texto.toLowerCase().trim();
+        // 1. GATILHO DE VÍDEO (PRIORIDADE TOTAL)
+        const regexVideo = /(video|vídeo)/i;
+        const regexComando = /(cria|faz|gerar|produzir|monta)/i;
 
-        // 1. FILTRO DE CUMPRIMENTOS (Gera resposta rápida via IA com a hora atual)
-        const saudacoes = [
-            "oi", "olá", "bom dia", "boa tarde", "boa noite", "e aí", "jarvis",
-            "como esta", "como vai", "como você está", "tudo bem", "tudo certo"
-        ];
+        if (regexVideo.test(textoLow) && regexComando.test(textoLow)) {
+            console.log("📂 [LOG] Rota: Fábrica de Vídeo Detectada!");
 
-        if (saudacoes.some(s => textoLow.includes(s))) {
-            const frases = [
-                "Sistemas operacionais, senhor. Núcleo de processamento em 100% de estabilidade.",
-                "Tudo em ordem por aqui. Aguardando suas próximas diretrizes estratégicas.",
-                "Boa tarde. Meus sistemas estão prontos para a ação. No que focamos agora?",
-                "Em pleno funcionamento. Como posso ser útil na estratégia de hoje?"
-            ];
-            const aleatoria = frases[Math.floor(Math.random() * frases.length)];
-            return bot.sendMessage(chatId, aleatoria);
+            // Limpeza do tema (Mantendo palavras descritivas como 'infantil' ou 'viral')
+            const tema = textoLow
+                .replace(/jarvis|cria|me|pra|mim|um|sobre|gerar|faz|fazer|produzir|video|vídeo/gi, "")
+                .trim();
+
+            // Delega TUDO para a Factory (Pesquisa, Memória e Produção)
+            return factory.gerenciarProducaoCompleta(bot, chatId, texto, tema, SERVICES);
         }
 
-        // 2. FEEDBACK VISUAL
+        // 2. FILTRO DE CUMPRIMENTOS
+        const saudacoes = ["oi", "olá", "bom dia", "boa tarde", "boa noite", "jarvis"];
+        if (saudacoes.some(s => textoLow === s) || (saudacoes.some(s => textoLow.includes(s)) && textoLow.length < 15)) {
+            const frases = ["Sistemas operacionais, senhor.", "Pronto para as ordens.", "Em prontidão."];
+            return bot.sendMessage(chatId, frases[Math.floor(Math.random() * frases.length)]);
+        }
+
+        // 3. CHAT GERAL / BUSCA WEB (Caso não seja pedido de vídeo)
         bot.sendChatAction(chatId, "typing");
         const statusMsg = await bot.sendMessage(chatId, "💭 Jarvis analisando...");
 
-        // 3. GATILHO DE LIMPEZA / RESUMO
-        const termosLimpeza = ["limpe seu histórico", "esqueça o que falamos", "resuma a conversa", "otimizar memória"];
-        if (termosLimpeza.some(termo => textoLow.includes(termo))) {
-            const hist = memory.lerConversa(chatId);
-            // Perfil "resumo" para consolidar dados vitais
-            const resumo = await brain.pensar(texto, "", hist, SERVICES.OLLAMA, chatId, "resumo");
-
-            memory.atualizarHistorico(chatId, resumo);
-            await bot.deleteMessage(chatId, statusMsg.message_id);
-            return bot.sendMessage(chatId, "🧹 **MEMÓRIA OTIMIZADA**: O histórico redundante foi condensado em diretrizes essenciais.");
-        }
-
-        // 4. RECUPERAÇÃO DE HISTÓRICO ANTERIOR
         const historico = memory.lerConversa(chatId);
-
-        // 5. INTELIGÊNCIA DE BUSCA (REATIVADA PARA CASOS COMO "FERRARI 458")
-        let contextoWeb = "";
-        const perguntasApenasInternas = ["o que conversamos", "minha última pergunta", "qual foi nosso papo"];
-
-        // Se NÃO for uma pergunta de auditoria de histórico, BUSCA na Web obrigatoriamente
-        if (!perguntasApenasInternas.some(p => textoLow.includes(p))) {
-            console.log(`🔍 [WEB] Buscando dados externos para: ${texto}`);
-            contextoWeb = await searcher.buscar(texto, SERVICES.SEARCH);
-            memory.salvarPesquisa(chatId, texto, contextoWeb);
-        }
-
-        // 6. PROCESSAMENTO NO CÉREBRO (Onde a Ferrari será processada)
+        const contextoWeb = await searcher.buscar(texto, SERVICES.SEARCH);
         const resposta = await brain.pensar(texto, contextoWeb, historico, SERVICES.OLLAMA, chatId, "estrategista");
 
-        // 7. PERSISTÊNCIA E CACHE
-        memory.salvarConversa(chatId, texto, resposta);
-
+        // Cache para o botão de voz
         global.ultimaRespostaIA = global.ultimaRespostaIA || {};
         global.ultimaRespostaIA[chatId] = resposta;
 
-        // 8. ENTREGA DOS RESULTADOS
+        memory.salvarConversa(chatId, texto, resposta);
+
         await bot.deleteMessage(chatId, statusMsg.message_id);
-        await bot.sendMessage(chatId, "😎 Consegui pensar em algo:", {
+        await bot.sendMessage(chatId, "😎 **ANÁLISE CONCLUÍDA**:", {
             parse_mode: "Markdown",
             reply_markup: {
                 inline_keyboard: [[
@@ -76,12 +58,12 @@ async function processarIA(bot, texto, chatId, SERVICES) {
             }
         });
 
-        // 9. DISSIPAÇÃO DE MEMÓRIA (O "Flash" para manter o sistema leve)
-        setTimeout(() => cleaner.flashRAM(), 5000);
+        // Limpeza agendada (5 minutos)
+        setTimeout(() => cleaner.flashRAM(), 300000);
 
     } catch (e) {
-        console.error("❌ Erro Engine:", e.message);
-        bot.sendMessage(chatId, "⚠️ **ERRO DE NÚCLEO**: Ocorreu uma instabilidade no processamento estratégico.");
+        console.error("❌ [ERRO ENGINE]:", e);
+        bot.sendMessage(chatId, "⚠️ Instabilidade no núcleo de processamento.");
     }
 }
 
