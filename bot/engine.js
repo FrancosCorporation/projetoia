@@ -6,50 +6,52 @@ const cleaner = require("./cleaner");
 const factory = require("./factory");
 
 async function processarIA(bot, texto, chatId, SERVICES) {
+    // Normalização agressiva para capturar comandos de voz do Whisper
     const textoLow = texto.toLowerCase().trim();
     console.log(`\n--- 🚀 [DEBUG] ENTRADA: "${textoLow}" ---`);
 
     try {
-        // 1. GATILHO DE VÍDEO (PRIORIDADE TOTAL)
-        const regexVideo = /(video|vídeo)/i;
-        const regexComando = /(cria|faz|gerar|produzir|monta)/i;
+        // GATILHO DE VÍDEO AMPLIADO (Adicionado "crio", "queria", "mostra")
+        const keywordsVideo = ["video", "vídeo", "clipe", "filme", "filmar"];
+        const keywordsComando = ["cria", "crio", "faz", "gera", "produz", "monta", "queria", "mostra"];
 
-        if (regexVideo.test(textoLow) && regexComando.test(textoLow)) {
-            console.log("📂 [LOG] Rota: Fábrica de Vídeo Detectada!");
+        const temVideo = keywordsVideo.some(k => textoLow.includes(k));
+        const temComando = keywordsComando.some(k => textoLow.includes(k));
 
-            // Limpeza do tema (Mantendo palavras descritivas como 'infantil' ou 'viral')
+        if (temVideo && temComando) {
+            console.log("📂 [LOG] Rota: Fábrica de Vídeo Ativada!");
+            // Limpa o tema para a busca de imagens não bugar
             const tema = textoLow
-                .replace(/jarvis|cria|me|pra|mim|um|sobre|gerar|faz|fazer|produzir|video|vídeo/gi, "")
+                .replace(/jarvis|crio|cria|faz|gera|produz|me|pra|mim|um|sobre|video|vídeo|queria|mostra/gi, "")
                 .trim();
-
-            // Delega TUDO para a Factory (Pesquisa, Memória e Produção)
-            return factory.gerenciarProducaoCompleta(bot, chatId, texto, tema, SERVICES);
+            
+            return await factory.gerenciarProducaoCompleta(bot, chatId, texto, tema, SERVICES);
         }
 
-        // 2. FILTRO DE CUMPRIMENTOS
+        // FILTRO DE CUMPRIMENTOS
         const saudacoes = ["oi", "olá", "bom dia", "boa tarde", "boa noite", "jarvis"];
         if (saudacoes.some(s => textoLow === s) || (saudacoes.some(s => textoLow.includes(s)) && textoLow.length < 15)) {
-            const frases = ["Sistemas operacionais, senhor.", "Pronto para as ordens.", "Em prontidão."];
-            return bot.sendMessage(chatId, frases[Math.floor(Math.random() * frases.length)]);
+            return bot.sendMessage(chatId, "Em prontidão. Como posso ajudar?");
         }
 
-        // 3. CHAT GERAL / BUSCA WEB (Caso não seja pedido de vídeo)
+        // CHAT GERAL
         bot.sendChatAction(chatId, "typing");
-        const statusMsg = await bot.sendMessage(chatId, "💭 Jarvis analisando...");
+        const statusMsg = await bot.sendMessage(chatId, "💭 Processando análise...");
 
         const historico = memory.lerConversa(chatId);
         const contextoWeb = await searcher.buscar(texto, SERVICES.SEARCH);
+        
+        // Perfil estrategista para não gerar textos gigantes que quebram o Telegram
         const resposta = await brain.pensar(texto, contextoWeb, historico, SERVICES.OLLAMA, chatId, "estrategista");
 
-        // Cache para o botão de voz
         global.ultimaRespostaIA = global.ultimaRespostaIA || {};
         global.ultimaRespostaIA[chatId] = resposta;
-
         memory.salvarConversa(chatId, texto, resposta);
 
         await bot.deleteMessage(chatId, statusMsg.message_id);
-        await bot.sendMessage(chatId, "😎 **ANÁLISE CONCLUÍDA**:", {
-            parse_mode: "Markdown",
+        
+        // Enviando como texto simples (sem Markdown) para evitar o erro 400 Bad Request
+        await bot.sendMessage(chatId, resposta, {
             reply_markup: {
                 inline_keyboard: [[
                     { text: "📝 Texto", callback_data: "t" },
@@ -58,12 +60,12 @@ async function processarIA(bot, texto, chatId, SERVICES) {
             }
         });
 
-        // Limpeza agendada (5 minutos)
         setTimeout(() => cleaner.flashRAM(), 300000);
 
     } catch (e) {
         console.error("❌ [ERRO ENGINE]:", e);
-        bot.sendMessage(chatId, "⚠️ Instabilidade no núcleo de processamento.");
+        // Fallback simples para o usuário não ficar sem resposta
+        bot.sendMessage(chatId, "⚠️ Tive um problema ao formatar a resposta, mas estou operacional.");
     }
 }
 

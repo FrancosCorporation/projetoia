@@ -1,28 +1,23 @@
 // voice_master.js
-const axios = require('axios');
-const fs = require('fs');
+const { exec } = require('child_process');
 
 const voiceMaster = {
-    // Gera voz usando as vozes internas do TikTok (Grátis e Viral)
     gerarVozTikTok: async (texto, pathDestino) => {
-        try {
-            console.log("🎤 Gerando narração estilo TikTok...");
-            
-            // Usando um serviço de relay para a API do TikTok (exemplo de implementação)
-            const response = await axios.post('https://tiktok-tts.weilnet.workers.dev/api/generation', {
-                text: texto,
-                voice: 'br_003' // Voz masculina padrão brasileira / br_005 para feminina
-            });
+        return new Promise((resolve, reject) => {
+            const modelPath = "/app/piper/pt_BR-jeff-medium.onnx"; 
+            const textoLimpo = texto.replace(/"/g, '').replace(/'/g, '').replace(/\n/g, ' ');
 
-            if (response.data.data) {
-                const buffer = Buffer.from(response.data.data, 'base64');
-                fs.writeFileSync(pathDestino, buffer);
-                return pathDestino;
-            }
-        } catch (e) {
-            console.error("❌ Falha na voz do TikTok:", e.message);
-            return null;
-        }
+            // Chamamos 'piper' diretamente como comando de sistema
+            const comando = `printf "${textoLimpo}" | piper --model /app/piper/pt_BR-jeff-medium.onnx --output_file ${pathDestino} --length_scale 1.05 --sentence_silence 0.4`;
+
+            exec(comando, (error) => {
+                if (error) {
+                    console.error("❌ Erro no Piper:", error);
+                    return reject(error);
+                }
+                resolve(pathDestino);
+            });
+        });
     }
 };
 

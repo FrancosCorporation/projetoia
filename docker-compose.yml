@@ -43,19 +43,20 @@ services:
 
   # JARVIS (Bot Telegram)
   bot:
-    build: ./bot
+    build:
+      context: .
+      dockerfile: ./bot/Dockerfile
     container_name: telegram_bot
+    volumes:
+      - ./bot/memorias:/app/memorias
+      - ./bot/output:/app/output
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      - whisper
-      - piper
     env_file:
       - .env
     restart: unless-stopped
     environment:
       - TZ=America/Sao_Paulo
-
   # BUSCA (Searxng)
   searxng:
     image: searxng/searxng:latest
