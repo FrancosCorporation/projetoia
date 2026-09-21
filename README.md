@@ -1,5 +1,22 @@
 # Projeto IA
 
+## 🐳 Instalação e Execução (Docker) — recomendado
+
+### Pré-requisitos
+- [Docker](https://docs.docker.com/get-docker/) + Docker Compose
+
+### Rodar com Docker
+```bash
+docker compose up --build
+```
+Já possui docker-compose (whisper, piper, open-webui, searxng, bot).
+
+### Sem Docker (local)
+```bash
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
 Assistente pessoal para **Telegram** com IA local: transcrição de áudio,
 respostas geradas por LLM, busca na web e resposta por voz — tudo orquestrado
 com **Docker Compose**.
