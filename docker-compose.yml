@@ -11,7 +11,7 @@ services:
       - LD_LIBRARY_PATH=/usr/lib/wsl/lib
     volumes:
       - /usr/lib/wsl:/usr/lib/wsl
-    restart: unless-stopped
+    restart: no
 
   # INTELIGÊNCIA (Ollama)
   #ollama:
@@ -26,7 +26,7 @@ services:
   #  environment:
   #    - HSA_OVERRIDE_GFX_VERSION=10.3.0
   #    - LD_LIBRARY_PATH=/usr/lib/wsl/lib # VITAL: Aponta para os drivers mapeados
-  #  restart: unless-stopped
+  #  restart: no
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
@@ -37,13 +37,13 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
       - open-webui_data:/app/backend/data
-    restart: unless-stopped
+    restart: no
 
   # VOZ (Piper)
   piper:
     image: rhasspy/piper-http
     container_name: piper
-    restart: unless-stopped
+    restart: no
     ports:
       - "5000:5000"
     volumes:
@@ -61,7 +61,7 @@ services:
       - piper
     env_file:
       - .env
-    restart: unless-stopped
+    restart: no
 
   # Você pode remover o serviço 'ollama' do seu docker-compose, 
   # já que ele vai rodar direto no Windows agora.
@@ -69,7 +69,7 @@ services:
   searxng:
     image: searxng/searxng:latest
     container_name: searxng
-    restart: unless-stopped
+    restart: no
     ports:
       - "8080:8080"
     volumes:
