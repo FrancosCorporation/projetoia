@@ -1,5 +1,6 @@
 //brain.js
-const axios = require("axios");
+const axios = require('axios');
+const MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
 
 async function pensar(texto, contextoWeb, historico, url, chatId, perfil = "estrategista") {
     const dataHoraBrasilia = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -55,20 +56,25 @@ async function pensar(texto, contextoWeb, historico, url, chatId, perfil = "estr
 
     try {
         const res = await axios.post(url, {
-            model: "llama3:8b-instruct-q8_0",
+        model: MODEL,
             prompt,
             stream: false,
-            options: {
+        options: {
                 temperature: config.temp,
                 num_predict: config.predict,
                 presence_penalty: config.penalty,
                 num_ctx: 8192 // Janela de contexto expandida para o Q8
-            }
-        }, { timeout: 120000 });
+        }
+    }, {
+      timeout: 180000,
+      maxRedirects: 0,
+      maxBodyLength: 256 * 1024,
+      maxContentLength: 1024 * 1024,
+    });
 
-        return res.data.response.trim();
-    } catch (e) {
-        return "⚠️ Erro no processamento estratégico.";
+        return typeof res.data?.response === 'string' ? res.data.response.trim() : 'Não recebi uma resposta válida do modelo.';
+    } catch {
+        return '⚠️ O modelo local está indisponível ou demorou demais.';
     }
 }
 

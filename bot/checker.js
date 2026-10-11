@@ -1,33 +1,38 @@
-const axios = require("axios");
+const axios = require('axios');
 
-async function verificarServidores(services) {
-    console.log("\n" + "=".repeat(40));
-    console.log("🔍 MONITOR DE INTEGRIDADE DO MAESTRO");
-    console.log("=".repeat(40));
-
-    const checks = [
-    { nome: "Whisper (Transcrição)", url: "http://whisper:9000/openapi.json" },
-    { nome: "Ollama (Windows)", url: "http://host.docker.internal:11434/api/tags" },
-    { nome: "Piper (Voz)", url: "http://piper:5000", dica: "Verifique o container 'piper'." }, // <--- Porta 5000
-    { nome: "SearXNG (Busca)", url: "http://searxng:8080/search?q=teste" }
+const checks = [
+  { name: 'Whisper', key: 'WHISPER_HEALTH' },
+  { name: 'Ollama', key: 'OLLAMA_HEALTH' },
+  { name: 'Piper', key: 'PIPER_HEALTH' },
+  { name: 'SearXNG', key: 'SEARCH' },
 ];
 
-    let todosOnline = true;
-
-    for (const servico of checks) {
-        try {
-            const inicio = Date.now();
-            await axios.get(servico.url, { timeout: 5000, validateStatus: () => true });
-            console.log(`✅ ${servico.nome.padEnd(25)} | ONLINE (${Date.now() - inicio}ms)`);
-        } catch (e) {
-            console.log(`❌ ${servico.nome.padEnd(25)} | OFFLINE`);
-            todosOnline = false;
-        }
+async function verificarServidores(services) {
+  const results = await Promise.all(checks.map(async ({ name, key }) => {
+    const url = services[key];
+    if (!url) return { name, online: false };
+    try {
+      const response = await axios.get(url, {
+        timeout: 3000,
+        maxRedirects: 0,
+        maxContentLength: 256 * 1024,
+        validateStatus: (status) => status >= 200 && status < 400,
+        ...(name === 'SearXNG' ? { params: { q: 'health', format: 'json' } } : {}),
+      });
+      if (name === 'SearXNG' && !Array.isArray(response.data?.results)) {
+        return { name, online: false };
+      }
+      return { name, online: true };
+    } catch {
+      return { name, online: false };
     }
+  }));
 
-    console.log("=".repeat(40));
-    if (!todosOnline) console.log("⚠️ ATENÇÃO: ALGUNS SERVIÇOS ESTÃO FORA!");
-    console.log("=".repeat(40) + "\n");
+  console.log('\n🔍 Estado dos serviços');
+  for (const result of results) {
+    console.log(`${result.online ? '✅' : '⚠️'} ${result.name}: ${result.online ? 'disponível' : 'indisponível'}`);
+  }
+  return Object.fromEntries(results.map(({ name, online }) => [name, online]));
 }
 
 module.exports = { verificarServidores };

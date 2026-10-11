@@ -1,82 +1,130 @@
+name: projetoia
+
 services:
-  # TRANSCRIÇÃO (Whisper)
   whisper:
     build: ./whisper
-    container_name: whisper
-    ports:
-      - "9000:9000"
-    devices:
-      - "/dev/dxg:/dev/dxg" # O padrão correto para Windows/WSL2
+    expose:
+      - "9000"
     environment:
-      - LD_LIBRARY_PATH=/usr/lib/wsl/lib
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
     volumes:
-      - /usr/lib/wsl:/usr/lib/wsl
-    restart: no
+      - whisper_models:/home/app/.cache/whisper
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5m
+      retries: 3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
-  # INTELIGÊNCIA (Ollama)
-  #ollama:
-  #  image: ollama/ollama:latest
-  #  container_name: ollama
-  #  privileged: true
-  #  volumes:
-  #    - ollama_data:/root/.ollama
-  #    - /usr/lib/wsl:/usr/lib/wsl # PASSO VITAL: Mapeia os drivers do Windows para o Docker
-  #  devices:
-  #    - "/dev/dxg:/dev/dxg"      # Único caminho que o Windows entende para GPU
-  #  environment:
-  #    - HSA_OVERRIDE_GFX_VERSION=10.3.0
-  #    - LD_LIBRARY_PATH=/usr/lib/wsl/lib # VITAL: Aponta para os drivers mapeados
-  #  restart: no
-
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    container_name: open-webui
-    ports:
-      - "3000:8080"
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-    volumes:
-      - open-webui_data:/app/backend/data
-    restart: no
-
-  # VOZ (Piper)
   piper:
-    image: rhasspy/piper-http
-    container_name: piper
-    restart: no
-    ports:
-      - "5000:5000"
+    build: ./piper
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/info', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  valkey:
+    image: docker.io/valkey/valkey:9-alpine
+    command: ["valkey-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
-      - ./piper:/quality
-    command: ["-m", "/quality/pt_BR-faber-medium.onnx", "--data-dir", "/quality"]
-
-  # MAESTRO (Bot)
-  bot:
-    build: ./bot
-    container_name: telegram_bot
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # Isso cria a ponte Docker -> Windows
-    depends_on:
-      - whisper
-      - piper
-    env_file:
-      - .env
-    restart: no
-
-  # Você pode remover o serviço 'ollama' do seu docker-compose, 
-  # já que ele vai rodar direto no Windows agora.
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   searxng:
-    image: searxng/searxng:latest
-    container_name: searxng
-    restart: no
-    ports:
-      - "8080:8080"
+    image: docker.io/searxng/searxng:latest
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Gere SEARXNG_SECRET em .env}
+      SEARXNG_LIMITER: "true"
+      SEARXNG_VALKEY_URL: valkey://valkey:6379/0
     volumes:
-      - ./searxng/settings.yml:/etc/searxng/settings.yml:rw
-    cap_add:
-      - NET_ADMIN
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng_data:/var/cache/searxng
+    depends_on:
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.11.4
+    ports:
+      - "127.0.0.1:3000:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      WEBUI_SECRET_KEY: ${OPEN_WEBUI_SECRET_KEY:?Gere OPEN_WEBUI_SECRET_KEY em .env}
+    volumes:
+      - open_webui_data:/app/backend/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  bot:
+    build: ./bot
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:?Configure TELEGRAM_TOKEN em .env}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:?Configure TELEGRAM_ALLOWED_USER_IDS em .env}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      WHISPER_URL: http://whisper:9000
+      PIPER_URL: http://piper:5000
+      SEARCH_URL: http://searxng:8080
+      MEMORY_DIR: /data/memorias
+    volumes:
+      - bot_memory:/data
+    depends_on:
+      whisper:
+        condition: service_healthy
+      piper:
+        condition: service_healthy
+      searxng:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
-  ollama_data:
-  open-webui_data:
+  whisper_models:
+  valkey_data:
+  searxng_data:
+  open_webui_data:
+  bot_memory:

@@ -1,19 +1,26 @@
 @echo off
+setlocal
+
 set "FOLDER=piper"
+set "MODEL_NAME=pt_BR-faber-medium"
+set "MODEL_TMP=%FOLDER%\%MODEL_NAME%.onnx.part"
+set "CONFIG_TMP=%FOLDER%\%MODEL_NAME%.onnx.json.part"
 
-if not exist "%FOLDER%" (
-    echo Criando pasta %FOLDER%...
-    mkdir "%FOLDER%"
-)
+if not exist "%FOLDER%" mkdir "%FOLDER%"
 
-echo.
-echo === Baixando modelos do Piper para dentro de /%FOLDER% ===
-echo.
+echo Baixando a voz pt-BR Faber medium para o serviço Piper...
+curl.exe --fail --location --retry 3 --output "%MODEL_TMP%" "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx"
+if errorlevel 1 goto :failed
 
-curl -L --user-agent "Mozilla/5.0" -o "%FOLDER%/voz.onnx" "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/felipe/low/pt_BR-felipe-low.onnx"
-curl -L --user-agent "Mozilla/5.0" -o "%FOLDER%/voz.onnx.json" "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/felipe/low/pt_BR-felipe-low.onnx.json"
+curl.exe --fail --location --retry 3 --output "%CONFIG_TMP%" "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx.json"
+if errorlevel 1 goto :failed
 
-echo.
-echo === Download concluido! ===
-echo Verifique os arquivos em: %cd%/%FOLDER%
-pause
+move /Y "%MODEL_TMP%" "%FOLDER%\%MODEL_NAME%.onnx" >nul
+move /Y "%CONFIG_TMP%" "%FOLDER%\%MODEL_NAME%.onnx.json" >nul
+echo Voz instalada em %FOLDER%.
+exit /b 0
+
+:failed
+del /Q "%MODEL_TMP%" "%CONFIG_TMP%" 2>nul
+echo Falha ao baixar a voz. Os arquivos incompletos foram removidos.
+exit /b 1

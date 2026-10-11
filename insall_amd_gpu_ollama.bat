@@ -5,7 +5,9 @@ Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile "$
 Start-Process -FilePath "$env:TEMP\OllamaSetup.exe" -Wait
 
 # Configurar para o Docker conseguir falar com o Windows (Bryan -> GPU)
-[Environment]::SetEnvironmentVariable("OLLAMA_HOST", "0.0.0.0", "Machine")
+# O Ollama precisa escutar na interface do host para o Docker alcançá-lo.
+# Restrinja a porta TCP 11434 no Firewall do Windows à rede Docker/WSL.
+[Environment]::SetEnvironmentVariable("OLLAMA_HOST", "0.0.0.0", "User")
 $env:OLLAMA_HOST = "0.0.0.0"
 
 # Abrir o Ollama e baixar o modelo Llama 3.2 (como no site da AMD)

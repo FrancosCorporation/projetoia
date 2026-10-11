@@ -1,3 +1,11 @@
-node_modules/
+**/node_modules/
 .env
-whisper.cpp/
+.env.*
+!.env.example
+bot/memorias/
+**/__pycache__/
+*.py[cod]
+temp_*.ogg
+voice_*.wav
+*.tmp
+.cache/

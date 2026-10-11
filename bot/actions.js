@@ -1,55 +1,60 @@
-// actions.js
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+const axios = require('axios');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
+const { Transform } = require('stream');
+const { pipeline } = require('stream/promises');
+const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 
 async function gerarVoz(bot, chatId, texto, voz, urlPiper) {
-    const filePath = path.join(__dirname, `voice_${chatId}_${Date.now()}.wav`);
+    const filePath = path.join(os.tmpdir(), `projetoia-voice-${crypto.randomUUID()}.wav`);
+    const textoLimpo = String(texto)
+        .replace(/https?:\/\/[^\s]+/g, '')
+        .replace(/[#*_`]/g, '')
+        .replace(/\n+/g, '. ')
+        .replace(/[()]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 3000);
+
+    if (!textoLimpo) {
+        await bot.sendMessage(chatId, 'Não há texto para converter em voz.');
+        return;
+    }
 
     try {
-        console.log(`[PIPER] Iniciando limpeza e geração para o chat ${chatId}...`);
-        await bot.sendChatAction(chatId, "record_audio");
-
-        // --- AQUI ENTRA A LIMPEZA PESADA ---
-        const textoLimpo = texto
-            .replace(/(https?:\/\/[^\s]+)/g, '') // Remove links (isso mata o áudio do Piper)
-            .replace(/[#*_\-]/g, '')             // Remove formatação Markdown
-            .replace(/\n+/g, '. ')                // Troca quebras de linha por pontos (melhora a dicção)
-            .replace(/[()]/g, '')                 // Remove parênteses
-            .replace(/\s+/g, ' ')                 // Remove espaços duplos
-            .trim();
-
-        const response = await axios({
-            method: "post",
-            url: urlPiper,
-            data: { text: textoLimpo }, 
-            responseType: "stream",
-            headers: { 'Content-Type': 'application/json' }, 
-            timeout: 60000
+        await bot.sendChatAction(chatId, 'record_audio').catch(() => {});
+        const response = await axios.post(`${urlPiper.replace(/\/+$/, '')}/synthesize`, {
+            text: textoLimpo,
+            voice: voz,
+        }, {
+            responseType: 'stream',
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 90000,
+            maxRedirects: 0,
+            maxBodyLength: 16 * 1024,
+            maxContentLength: MAX_AUDIO_BYTES,
         });
 
-        const writer = fs.createWriteStream(filePath);
-        response.data.pipe(writer);
-
-        await new Promise((resolve, reject) => {
-            writer.on("finish", resolve);
-            writer.on("error", reject);
+        let received = 0;
+        const byteLimit = new Transform({
+            transform(chunk, _encoding, callback) {
+                received += chunk.length;
+                callback(received > MAX_AUDIO_BYTES ? new Error('Áudio acima do limite.') : null, chunk);
+            },
         });
-
-        if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
-            await bot.sendVoice(chatId, filePath);
-            console.log(`✅ Áudio enviado com sucesso.`);
-        } else {
-            throw new Error("Arquivo de áudio gerado está vazio.");
+        await pipeline(response.data, byteLimit, fs.createWriteStream(filePath, { flags: 'wx', mode: 0o600 }));
+        const audio = await fs.promises.stat(filePath);
+        if (!audio.isFile() || audio.size === 0 || audio.size > MAX_AUDIO_BYTES) {
+            throw new Error('Áudio inválido ou maior que o limite.');
         }
-
-    } catch (e) {
-        console.error("❌ Erro no Piper:", e.response?.data || e.message);
-        bot.sendMessage(chatId, "❌ Erro ao converter para voz. Verifique se o texto não é longo demais.");
+        await bot.sendVoice(chatId, filePath);
+    } catch (error) {
+        console.error('Erro ao gerar áudio:', error.code || 'PIPER_ERROR');
+        await bot.sendMessage(chatId, 'Não consegui gerar o áudio agora. Tente novamente em instantes.').catch(() => {});
     } finally {
-        if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (err) { }
-        }
+        await fs.promises.rm(filePath, { force: true }).catch(() => {});
     }
 }
 

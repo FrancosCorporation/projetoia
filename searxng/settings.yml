@@ -2,15 +2,18 @@
 use_default_settings: true
 
 server:
-  secret_key: "maestro_secret_key_123"
-  limiter: false       # DESATIVA o bloqueio de bots (essencial!)
-  image_proxy: true
-  base_url: http://localhost:8080/
+  secret_key: "ultrasecretkey" # Substituída por SEARXNG_SECRET no Compose.
+  limiter: true
+  image_proxy: false
+  base_url: false
 
 search:
   formats:
     - html
-    - json             # HABILITA o formato que o seu index.js lê
+    - json
+
+valkey:
+  url: valkey://valkey:6379/0
 
 engines:
   - name: google

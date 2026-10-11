@@ -1,4 +1,2 @@
-fastapi
-uvicorn
-requests
-python-multipart
+# Dependências do serviço de transcrição Whisper.
+-r whisper/requirements.txt
