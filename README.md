@@ -1,106 +1,98 @@
 # Projeto IA
 
-## 🐳 Instalação e Execução (Docker) — recomendado
+Assistente pessoal para Telegram com Ollama, transcrição de áudio, pesquisa na
+web e respostas por voz. Os serviços rodam em Docker Compose; o Ollama fica no
+host e é acessado pela rede local da máquina.
 
-### Pré-requisitos
-- [Docker](https://docs.docker.com/get-docker/) + Docker Compose
+## O que o projeto faz
 
-### Rodar com Docker
-```bash
-docker compose up --build
-```
-Já possui docker-compose (whisper, piper, open-webui, searxng, bot).
+- Aceita mensagens de texto e áudio em conversas privadas com usuários
+  autorizados por ID numérico.
+- Transcreve áudios de até 3 minutos e 20 MB com Whisper no CPU.
+- Gera respostas com o modelo configurado no Ollama (padrão: `llama3.2`).
+- Consulta SearXNG e pode ler a resposta em voz alta com Piper.
+- Mantém um histórico local limitado por conversa. `/forget` apaga o histórico e
+  as pesquisas salvas daquele usuário.
+- Inclui Open WebUI, acessível no host somente em `127.0.0.1:3000`.
 
-### Sem Docker (local)
-```bash
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
+## Requisitos
 
-Assistente pessoal para **Telegram** com IA local: transcrição de áudio,
-respostas geradas por LLM, busca na web e resposta por voz — tudo orquestrado
-com **Docker Compose**.
+- Docker Engine com Docker Compose v2.
+- Ollama instalado e um modelo baixado no host.
+- Um bot criado pelo BotFather e o ID numérico de cada usuário autorizado.
+- `openssl` para gerar os segredos do Compose.
 
-![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-black?style=flat-square)
-![Whisper](https://img.shields.io/badge/Whisper-ASR-412991?style=flat-square)
-![Piper](https://img.shields.io/badge/Piper-TTS-blue?style=flat-square)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![Status](https://img.shields.io/badge/status-projeto%20pessoal-blue?style=flat-square)
+## Configuração
 
-## Sobre
+1. Crie o arquivo local de ambiente:
 
-Bot de Telegram que funciona como assistente de IA rodando 100% na máquina do
-usuário: recebe mensagens de texto ou áudio, transcreve com Whisper, consulta
-um LLM servido pelo Ollama, opcionalmente pesquisa na web via SearXNG e pode
-responder com áudio gerado pelo Piper (vozes pt-BR).
+   ```bash
+   cp .env.example .env
+   ```
 
-O projeto foi montado para rodar em **WSL2 com GPU AMD** (usa DirectML via
-`/dev/dxg`), com scripts `.bat` para baixar modelos e instalar o Ollama com
-aceleração AMD.
+2. Gere dois valores diferentes com `openssl rand -hex 32`. Preencha
+   `SEARXNG_SECRET` e `OPEN_WEBUI_SECRET_KEY` com esses valores.
 
-## Funcionalidades
+3. Preencha `TELEGRAM_TOKEN` com o token do BotFather e
+   `TELEGRAM_ALLOWED_USER_IDS` com os IDs numéricos permitidos, separados por
+   vírgulas. O bot ignora mensagens de grupos e de outros usuários.
 
-Comprovadas pelo código:
+4. Instale/abra o Ollama no host, baixe o modelo configurado e confira o
+   endereço que os containers devem usar:
 
-- **Bot Telegram** (`bot/index.js`) com validação de infraestrutura na
-  inicialização.
-- **Transcrição de áudio** (`bot/transcriber.js`) via serviço Whisper
-  (`whisper:9000/asr`, tarefa `transcribe`, idioma `pt`).
-- **Motor de conversa** (`bot/engine.js`, `bot/brain.js`) com memória
-  (`bot/memory.js`) e ações (`bot/actions.js`).
-- **Busca na web** (`bot/searcher.js`) via SearXNG.
-- **Voz de resposta** (`bot/actions.js` + `piper/`): geração de WAV com
-  limpeza de markdown/links antes da síntese; vozes pt-BR `faber` e `jeff`
-  (modelos ONNX incluídos).
-- **Infra como código**: `docker-compose.yml` sobe Whisper, Piper, SearXNG,
-  Open WebUI e integra o Ollama do host; Dockerfiles próprios em `bot/`,
-  `piper/` e `whisper/`.
-- **Arquivos de apoio**: `download_model.bat` e `insall_amd_gpu_ollama.bat`
-  (Windows/WSL2 + GPU AMD), `requirements.txt`.
+   ```bash
+   ollama pull llama3.2
+   ```
 
-## Stack
+   O padrão é `http://host.docker.internal:11434`. Ajuste `OLLAMA_URL` no `.env`
+   se o Ollama estiver em outro endereço. Em Windows, o script
+   `install_amd_gpu_ollama.ps1` configura o Ollama para aceitar conexões dos
+   containers. Restrinja a porta TCP 11434 pelo Firewall do Windows à rede
+   Docker/WSL; não a exponha à internet.
 
-- **Node.js** (bot Telegram: `node-telegram-bot-api`, axios, dotenv)
-- **Python** (serviços Piper/Whisper)
-- **Ollama** (LLM local), **OpenAI Whisper** (ASR), **Piper** (TTS),
-  **SearXNG** (busca), **Open WebUI** (interface)
-- **Docker Compose** (orquestração)
-
-## Como rodar
-
-1. Copie `.env.example` (ou crie `bot/.env`) com:
-
-```bash
-TELEGRAM_TOKEN=seu_token_do_botfather
-OLLAMA_URL=http://host.docker.internal:11434
-```
-
-2. Suba a stack:
+## Iniciar
 
 ```bash
 docker compose up -d --build
+docker compose logs -f bot
 ```
 
-3. Baixe os modelos do Ollama no host (ex.: `ollama pull qwen3.5:0.8b`) —
-   ou use `download_model.bat` no Windows.
+Na primeira inicialização, o container baixa o modelo Whisper indicado por
+`WHISPER_MODEL` (padrão `small`). O download fica no volume persistente
+`whisper_models`. A inferência do Whisper nesta stack usa CPU; a configuração do
+Ollama no host pode usar a GPU disponível para o modelo de linguagem.
 
-> Ajuste `SERVICES` em `bot/index.js` se os containers tiverem outros nomes/
-> portas. Os modelos `.onnx` do Piper são grandes e ficam versionados aqui
-> para facilitar o deploy.
+Abra <http://127.0.0.1:3000> para usar o Open WebUI. Os outros serviços não têm
+portas publicadas no host e são acessíveis apenas pela rede interna do Compose.
 
-## Estrutura do projeto
+No Telegram, envie uma mensagem de texto ou áudio. `/help` mostra os comandos e
+`/forget` apaga o histórico local da conversa. O bot limita tamanho e frequência
+das solicitações e processa uma solicitação por vez.
 
-```
-bot/            # código do bot Telegram (Dockerfile + módulos)
-piper/          # serviço de TTS + vozes pt-BR (ONNX)
-whisper/        # serviço de transcrição
-searxng/        # configuração do buscador
-docker-compose.yml
-```
+## Dados e privacidade
 
-## Licença
+- Mensagens e áudios enviados ao bot passam pelos servidores do Telegram.
+- O texto da busca é enviado pelo SearXNG aos mecanismos de busca configurados.
+- O conteúdo da conversa e as transcrições são processados localmente pelo
+  Ollama e pelo Whisper; o histórico limitado é salvo no volume `bot_memory`.
+- O Open WebUI salva seus dados no volume `open_webui_data`.
+- `docker compose down` mantém os volumes. `docker compose down -v` também os
+  apaga, incluindo o histórico do bot, os modelos baixados e os dados do WebUI.
+- O arquivo `.env` contém credenciais e não deve ser compartilhado nem commitado.
 
-MIT — veja [LICENSE](LICENSE).
+## Arquivos úteis
+
+- `docker-compose.yml`: serviços, portas, volumes e limites de rede.
+- `.env.example`: nomes das variáveis necessárias.
+- `SECURITY.md`: configuração segura, retenção de dados e reporte de falhas.
+- `download_model.bat`: baixa os arquivos da voz Faber pt-BR para Piper.
+- `install_amd_gpu_ollama.ps1`: instala o Ollama no Windows e baixa o modelo
+  padrão.
+
+## Licenças
+
+O arquivo [LICENSE](LICENSE) cobre o código deste projeto. O container usa
+Piper `piper-tts` 1.8.0, licenciado separadamente sob GPL-3.0-or-later ([registro
+no PyPI](https://pypi.org/project/piper-tts/1.8.0/)). Os modelos de voz têm
+licenças próprias; o modelo Faber pt-BR incluído está marcado como MIT em sua
+[página no Hugging Face](https://huggingface.co/rhasspy/piper-voices/blob/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx).

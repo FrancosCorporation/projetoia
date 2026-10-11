@@ -2,7 +2,6 @@
 use_default_settings: true
 
 server:
-  secret_key: "ultrasecretkey" # Substituída por SEARXNG_SECRET no Compose.
   limiter: true
   image_proxy: false
   base_url: false
