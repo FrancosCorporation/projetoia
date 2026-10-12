@@ -36,5 +36,8 @@ execução. Testes e chamadas aos serviços externos não foram executados.
 
 O workflow agora usa `ubuntu-24.04`, `actions/checkout@v7`,
 `actions/setup-node@v7` e `actions/setup-python@v7`. A checagem Node cobre 22 e
-24, alinhados ao mínimo `>=22` do pacote. CI `PENDING`; nenhum teste, container,
-Ollama, Whisper ou API do Telegram foi iniciado.
+24, alinhados ao mínimo `>=22` do pacote. Commit `4163a45` foi validado pela CI
+`38195552819`, que passou nos dois jobs. Checks locais (`npm run check`, audit 0,
+AST Python, parse YAML, Compose config com env descartável e diff check)
+passaram. Nenhum teste, container, Ollama, Whisper ou API do Telegram foi
+iniciado.
