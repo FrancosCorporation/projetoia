@@ -9,7 +9,11 @@ permissions:
 
 jobs:
   static-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
     env:
       TELEGRAM_TOKEN: "12345678901234567890123456789012345678"
       TELEGRAM_ALLOWED_USER_IDS: "123456789"
@@ -17,11 +21,11 @@ jobs:
       OPEN_WEBUI_SECRET_KEY: "ci-only-open-webui-secret"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: bot/package-lock.json
 
@@ -29,7 +33,7 @@ jobs:
       - run: npm run check --prefix bot
       - run: npm audit --prefix bot --audit-level=high
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

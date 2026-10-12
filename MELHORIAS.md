@@ -18,6 +18,7 @@
   documentar privacidade e licenças.
 - [x] Adicionar verificações estáticas automatizadas para JavaScript, Python,
   dependências e configuração do Compose.
+- [x] Fixar o runner Ubuntu e validar a CI em Node 22 e 24 com Actions atuais.
 
 ## Verificação pendente
 
@@ -30,3 +31,10 @@
 
 Os checks estáticos e a revisão do diff são registrados no histórico desta
 execução. Testes e chamadas aos serviços externos não foram executados.
+
+## DEVOPS-02 — CI previsível
+
+O workflow agora usa `ubuntu-24.04`, `actions/checkout@v7`,
+`actions/setup-node@v7` e `actions/setup-python@v7`. A checagem Node cobre 22 e
+24, alinhados ao mínimo `>=22` do pacote. CI `PENDING`; nenhum teste, container,
+Ollama, Whisper ou API do Telegram foi iniciado.
